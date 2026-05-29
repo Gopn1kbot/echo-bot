@@ -3,51 +3,37 @@ import os
 from aiogram import Bot, Dispatcher, F
 from aiogram.types import Message
 
+from brain import echo_ai
+from db import save, load
+
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 bot = Bot(token=BOT_TOKEN)
 dp = Dispatcher()
 
-# =========================
-# ПРОСТОЙ "ЭХО МОЗГ"
-# =========================
-
-def brain(text: str):
-    text = text.lower()
-
-    if "привет" in text:
-        return "О, здарова 😈"
-
-    if "как дела" in text:
-        return "Норм, живу пока ты пишешь"
-
-    if "кто ты" in text:
-        return "Я Эхо. Цифровой гопник."
-
-    if "спать" in text:
-        return "Иди уже спи, не выёбывайся"
-
-    return "Я тебя понял 😈"
-
-# =========================
-# ХЕНДЛЕР
-# =========================
 
 @dp.message(F.text)
-async def handler(message: Message):
-    reply = brain(message.text)
+async def handle(message: Message):
+    user_id = message.from_user.id
+
+    memory = load(user_id)
+
+    prompt = message.text
+    if memory:
+        prompt = f"Память: {memory}\n\nНовый вопрос: {message.text}"
+
+    reply = echo_ai(prompt)
+
+    save(user_id, message.text)
+
     await message.answer(reply)
 
-# =========================
-# СТАРТ
-# =========================
 
 async def main():
-    # 🔥 ВАЖНО: убирает Telegram Conflict навсегда
     await bot.delete_webhook(drop_pending_updates=True)
-
-    print("Echo running 😈")
+    print("Echo 2.0 Groq running 😈")
     await dp.start_polling(bot)
+
 
 if __name__ == "__main__":
     asyncio.run(main())
