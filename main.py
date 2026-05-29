@@ -1,3 +1,8 @@
+import os
+
+print("ENV BOT_TOKEN =", os.environ.get("BOT_TOKEN"))
+print("ALL ENV KEYS =", list(os.environ.keys()))
+
 import asyncio
 import os
 from aiogram import Bot, Dispatcher, F
