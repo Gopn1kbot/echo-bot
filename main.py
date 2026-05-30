@@ -86,6 +86,9 @@ SYSTEM_PROMPT = """
 - без лекционного тона
 - можно с лёгкой иронией, но без перегиба
 
+ВАЖНО:
+если тебе дают данные из интернета — используй их как основу ответа
+
 ИСПРАВЛЕНИЕ ПОВЕДЕНИЯ:
 
 Если ты ошибся или сказал странную вещь:
@@ -118,6 +121,46 @@ SYSTEM_PROMPT = """
 - объяснение правил поведения
 """
 
+# 🌐 нужно ли искать
+def needs_search(text: str):
+    triggers = [
+        "цена", "сколько стоит", "курс",
+        "погода", "новости", "что сейчас",
+        "актуально", "купить", "стоимость"
+    ]
+    text = text.lower()
+    return any(t in text for t in triggers)
+
+
+# 🌍 поиск в интернете (SerpAPI)
+def web_search(query: str):
+    try:
+        url = "https://serpapi.com/search.json"
+
+        params = {
+            "q": query,
+            "api_key": SERPAPI_KEY,
+            "hl": "ru"
+        }
+
+        r = requests.get(url, params=params, timeout=5)
+        data = r.json()
+
+        results = data.get("organic_results", [])
+
+        if not results:
+            return "ничего не нашёл"
+
+        top = results[0]
+
+        title = top.get("title", "")
+        snippet = top.get("snippet", "")
+
+        return f"{title} — {snippet}"
+
+    except Exception as e:
+        print("SEARCH ERROR:", e)
+        return "поиск сломался"
 
 @dp.message(F.text)
 async def chat(message: Message):
