@@ -1,89 +1,42 @@
-import asyncio
-import os
+import sqlite3
+from datetime import datetime
 
-from aiogram import Bot, Dispatcher, F
-from aiogram.types import Message
-from groq import Groq
+conn = sqlite3.connect("echo.db", check_same_thread=False)
+cur = conn.cursor()
 
-import db
+# 🧠 таблица памяти (контекст диалога)
+cur.execute("""
+CREATE TABLE IF NOT EXISTS memory (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER,
+    role TEXT,
+    content TEXT,
+    created_at TEXT
+)
+""")
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
-GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-
-if not BOT_TOKEN:
-    raise ValueError("BOT_TOKEN not found")
-
-if not GROQ_API_KEY:
-    raise ValueError("GROQ_API_KEY not found")
-
-bot = Bot(token=BOT_TOKEN)
-dp = Dispatcher()
-
-client = Groq(api_key=GROQ_API_KEY)
+conn.commit()
 
 
-SYSTEM_PROMPT = """
-Ты Эхо.
-
-Стиль:
-- коротко
-- с лёгким сарказмом
-- по-простому
-- не перегибаешь с агрессией
-"""
+# 💾 сохранить сообщение
+def save_message(user_id, role, content):
+    cur.execute("""
+    INSERT INTO memory (user_id, role, content, created_at)
+    VALUES (?, ?, ?, ?)
+    """, (user_id, role, content, datetime.now()))
+    conn.commit()
 
 
-@dp.message(F.text)
-async def chat(message: Message):
+# 📖 загрузить историю
+def load_history(user_id, limit=10):
+    cur.execute("""
+    SELECT role, content FROM memory
+    WHERE user_id=?
+    ORDER BY id DESC
+    LIMIT ?
+    """, (user_id, limit))
 
-    text = message.text
-    user_id = message.from_user.id
+    rows = cur.fetchall()
 
-    if not text:
-        return
-
-    # 💾 сохраняем сообщение пользователя
-    db.save_message(user_id, "user", text)
-
-    # 📖 грузим историю
-    history = db.load_history(user_id, limit=8)
-
-    messages = [
-        {"role": "system", "content": SYSTEM_PROMPT}
-    ]
-
-    for role, content in history:
-        messages.append({
-            "role": role,
-            "content": content
-        })
-
-    try:
-        response = client.chat.completions.create(
-            model="llama-3.3-70b-versatile",
-            messages=messages,
-            temperature=0.9,
-            max_tokens=500
-        )
-
-        answer = response.choices[0].message.content
-
-        # 💾 сохраняем ответ бота
-        db.save_message(user_id, "assistant", answer)
-
-        await message.answer(answer)
-
-    except Exception as e:
-        print("ERROR:", e)
-        await message.answer("Я завис 😵 попробуй ещё раз")
-
-
-async def main():
-    print("START OK")
-
-    await bot.delete_webhook(drop_pending_updates=True)
-    await dp.start_polling(bot)
-
-
-if __name__ == "__main__":
-    asyncio.run(main())
+    # переворачиваем, чтобы было по порядку диалога
+    return list(reversed(rows))
